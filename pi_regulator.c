@@ -9,13 +9,22 @@
 #include <motors.h>
 #include <pi_regulator.h>
 #include <process_image.h>
-
+#include "sensors/proximity.h"
 #define DIST_OBJ 10.f
 #define ROT_GOAL IMAGE_BUFFER_SIZE/2
 #define ERROR_THRESHOLD 5.f
 #define SUM_THRESHOLD 10
+#define FORWARD_COEFF 100
+#define MIDDLE_F_COEFF 70
+#define MIDDLE_B_COEFF 50
+#define BACKWARD_COEFF 20
 #define KP 2.f
 #define KI 1.f
+#define KP_DETECT 2.f
+#define KI_DETECT 1.f
+#define NB_CAPTEUR 8
+#define NB_CAPTEUR_DROITE 4
+static int32_t proximity_distance[NB_CAPTEUR] = {0};
 
 static THD_WORKING_AREA(waPiRegulator, 256);
 static THD_FUNCTION(PiRegulator, arg) {
@@ -81,8 +90,8 @@ static THD_FUNCTION(PiRegulator, arg) {
         //applies the speed from the PI regulator
         if(error < 640)
         {
-		right_motor_set_speed(500-speed);
-		left_motor_set_speed(500+speed);
+		//right_motor_set_speed(500-speed);
+		//left_motor_set_speed(500+speed);
 		motor_state = 1;
         }
         else
@@ -94,7 +103,7 @@ static THD_FUNCTION(PiRegulator, arg) {
         			chThdSleepMilliseconds(100);
         		}*/
 
-        		right_motor_set_speed(0);
+        	right_motor_set_speed(0);
 			left_motor_set_speed(0);
         }
 
@@ -103,6 +112,60 @@ static THD_FUNCTION(PiRegulator, arg) {
     }
 }
 
+static THD_WORKING_AREA(waProxRegulator, 256);
+static THD_FUNCTION(ProxRegulator, arg) {
+
+    chRegSetThreadName(__FUNCTION__);
+    (void)arg;
+
+    systime_t time;
+
+    int16_t speed_det = 0;
+   // uint8_t motor_state;
+    float error_det=0;
+    float sum_error_det = 0;
+
+    while(1){
+           time = chVTGetSystemTime();
+           uint16_t prox_right=0;
+           uint16_t prox_left=0;
+           for(uint8_t i = 0 ; i < NB_CAPTEUR ; i+=1){
+        	   proximity_distance[i]=get_prox(i);
+        	   // coefficient à intégrer dans cette condition. cas ou le robot est de travers dans le labyrinthe
+           }
+        	prox_right=FORWARD_COEFF*proximity_distance[0]+MIDDLE_F_COEFF*proximity_distance[1]+MIDDLE_B_COEFF*proximity_distance[2]+BACKWARD_COEFF*proximity_distance[3];
+        	prox_left=FORWARD_COEFF*proximity_distance[7]+MIDDLE_F_COEFF*proximity_distance[6]+MIDDLE_B_COEFF*proximity_distance[5]+BACKWARD_COEFF*proximity_distance[4];
+           //On compare capteurs gauches et droites pour savoir dans quel sens tourner
+
+           if (prox_right>prox_left){
+        	   for(uint8_t i = 0 ; i < NB_CAPTEUR_DROITE ; i+=1){
+        		   error_det+=proximity_distance[i];
+        	   }
+           }
+
+           else{
+        	   for(uint8_t i = NB_CAPTEUR_DROITE ; i < NB_CAPTEUR ; i+=1){
+        		   error_det-=proximity_distance[i];
+        	   }
+           }
+
+           sum_error_det += error_det;
+           if(sum_error_det >= SUM_THRESHOLD)
+                   		sum_error_det = SUM_THRESHOLD;
+                   else if(sum_error_det <= -SUM_THRESHOLD)
+                   		sum_error_det = -SUM_THRESHOLD;
+           speed_det = (int16_t)(KP_DETECT*error_det + KI_DETECT*sum_error_det);
+           right_motor_set_speed(0);
+           left_motor_set_speed(0);
+
+      }
+
+}
+
+
 void pi_regulator_start(void){
 	chThdCreateStatic(waPiRegulator, sizeof(waPiRegulator), NORMALPRIO, PiRegulator, NULL);
+}
+void detect_regulator_start(void){
+	chThdCreateStatic(waProxRegulator, sizeof(waProxRegulator), NORMALPRIO, ProxRegulator, NULL);
 }

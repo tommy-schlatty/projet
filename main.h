@@ -8,6 +8,7 @@ extern "C" {
 #include "camera/dcmi_camera.h"
 #include "msgbus/messagebus.h"
 #include "parameter/parameter.h"
+#include "i2c_bus.h"
 
 
 //constants for the differents parts of the project

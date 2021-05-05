@@ -109,10 +109,6 @@ uint8_t detection_black_line(uint8_t *image)
 	for(start = 0; start < IMAGE_BUFFER_SIZE && image[start] > 0.45*average; start++);
 	for(stop = start; stop < IMAGE_BUFFER_SIZE && image[stop] <= 0.45*average; stop++);
 
-	chprintf((BaseSequentialStream *)&SD3, "start=%d     ", start);
-	chprintf((BaseSequentialStream *)&SD3, "stop=%d     ", stop);
-	chprintf((BaseSequentialStream *)&SD3, "size=%d\r\n", stop-start);
-
 	if (start < 640)
 	{
 		//chprintf((BaseSequentialStream *)&SD3, "start=%d\tstop=%d\r\n", start, stop);

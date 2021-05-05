@@ -3,5 +3,6 @@
 
 //start the PI regulator thread
 void pi_regulator_start(void);
+void detect_regulator_start(void);
 
 #endif /* PI_REGULATOR_H */

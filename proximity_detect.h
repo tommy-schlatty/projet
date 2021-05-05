@@ -10,6 +10,6 @@
 
 
 
-
+void proximity_lead(void);
 
 #endif /* PROXIMITY_DETECT_H_ */
