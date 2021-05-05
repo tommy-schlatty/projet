@@ -16,10 +16,11 @@ static float distance_cm = 0;
 static float line_position=IMAGE_BUFFER_SIZE/2;
 
 
+
 //semaphore
 static BSEMAPHORE_DECL(image_ready_sem, TRUE);
 
-uint8_t detection_black_line(uint8_t *image);
+void detection_black_line(uint8_t *image);
 
 static THD_WORKING_AREA(waCaptureImage, 256);
 static THD_FUNCTION(CaptureImage, arg) {
@@ -64,7 +65,7 @@ static THD_FUNCTION(ProcessImage, arg) {
     while(1){
     	//waits until an image has been captured
         chBSemWait(&image_ready_sem);
-		//gets the pointer to the array filled with the last image in RGB565    
+		//gets the pointer to the array filled with the last image in RGB565
 		img_buff_ptr = dcmi_get_last_image_ptr();
 
 		/*
@@ -97,7 +98,7 @@ static THD_FUNCTION(ProcessImage, arg) {
     }
 }
 
-uint8_t detection_black_line(uint8_t *image)
+void detection_black_line(uint8_t *image)
 {
 	uint32_t average = 0;
 	for (uint16_t i = 0; i<IMAGE_BUFFER_SIZE;i++)
@@ -106,12 +107,12 @@ uint8_t detection_black_line(uint8_t *image)
 	average /= IMAGE_BUFFER_SIZE;
 
 	uint16_t start, stop;
-	for(start = 0; start < IMAGE_BUFFER_SIZE && image[start] > 0.45*average; start++);
-	for(stop = start; stop < IMAGE_BUFFER_SIZE && image[stop] <= 0.45*average; stop++);
+	for(start = 0; start < IMAGE_BUFFER_SIZE && image[start] > 0.35*average; start++);
+	for(stop = start; stop < IMAGE_BUFFER_SIZE && image[stop] <= 0.35*average; stop++);
 
-	chprintf((BaseSequentialStream *)&SD3, "start=%d     ", start);
-	chprintf((BaseSequentialStream *)&SD3, "stop=%d     ", stop);
-	chprintf((BaseSequentialStream *)&SD3, "size=%d\r\n", stop-start);
+	//chprintf((BaseSequentialStream *)&SD3, "start=%d     ", start);
+	//chprintf((BaseSequentialStream *)&SD3, "stop=%d     ", stop);
+	//chprintf((BaseSequentialStream *)&SD3, "size=%d\r\n", stop-start);
 
 	if (start < 640)
 	{
@@ -125,12 +126,7 @@ uint8_t detection_black_line(uint8_t *image)
 		distance_cm = 0.;
 		line_position = 1000;
 	}
-
-
 	//chprintf((BaseSequentialStream *)&SD3, "dist to line=%f\r\n", distance_cm);
-
-	return (stop-start);
-
 }
 
 float get_distance_cm(void){
