@@ -20,8 +20,8 @@
 #define BACKWARD_COEFF 20
 #define KP 2.f
 #define KI 1.f
-#define KP_DETECT 0.5f
-#define KI_DETECT 0.1f
+#define KP_DETECT 0.2f
+#define KI_DETECT 0.15f
 #define NB_CAPTEUR 8
 #define NB_CAPTEUR_DROITE 4
 static int32_t proximity_distance[NB_CAPTEUR] = {0};
@@ -122,14 +122,18 @@ static THD_FUNCTION(ProxRegulator, arg) {
 
     int16_t speed_det = 0;
    // uint8_t motor_state;
-    float error_det;
+    int32_t error_det;
+    int32_t error_det_right;
+    int32_t error_det_left;
     float sum_error_det = 0;
 
     while(1){
     		error_det=0;
+    		error_det_right=0;
+    		error_det_left=0;
     		time_det = chVTGetSystemTime();
-    		uint16_t prox_right=0;
-    		uint16_t prox_left=0;
+    		uint32_t prox_right=0;
+    		uint32_t prox_left=0;
     		for(uint8_t i = 0 ; i < NB_CAPTEUR ; i+=1){
         	   proximity_distance[i]=get_prox(i);
         	   // coefficient à intégrer dans cette condition. cas ou le robot est de travers dans le labyrinthe
@@ -137,33 +141,51 @@ static THD_FUNCTION(ProxRegulator, arg) {
         	prox_right=FORWARD_COEFF*proximity_distance[0]+MIDDLE_F_COEFF*proximity_distance[1]+MIDDLE_B_COEFF*proximity_distance[2]+BACKWARD_COEFF*proximity_distance[3];
         	prox_left=FORWARD_COEFF*proximity_distance[7]+MIDDLE_F_COEFF*proximity_distance[6]+MIDDLE_B_COEFF*proximity_distance[5]+BACKWARD_COEFF*proximity_distance[4];
         	//On compare capteurs gauches et droites pour savoir dans quel sens tourner
+        	chprintf((BaseSequentialStream *)&SD3, "right1=%d\r\n", prox_right);
+        	chprintf((BaseSequentialStream *)&SD3, "left1=%d\r\n", prox_left);
 
-        	if (prox_right>prox_left){
-        	   for(uint8_t i = 0 ; i < NB_CAPTEUR_DROITE ; i+=1){
-        		   error_det+=proximity_distance[i];
-        	   }
-           }
+        	// ces deux boucles for ne servent pas si l'on s'occupe uniquement des valeurs avec coeffs
 
-           else{
-        	   for(uint8_t i = NB_CAPTEUR_DROITE ; i < NB_CAPTEUR ; i+=1){
-        		   error_det-=proximity_distance[i];
-        	   }
-           }
+        	for(uint8_t i = 0 ; i < NB_CAPTEUR_DROITE ; i+=1){
+        		error_det_right+=proximity_distance[i];
+        	}
 
-        	if(abs(error_det)<500)
+        	for(uint8_t i = NB_CAPTEUR_DROITE ; i < NB_CAPTEUR ; i+=1){
+        		error_det_left+=proximity_distance[i];
+        	}
+
+        	chprintf((BaseSequentialStream *)&SD3, "right2=%d\r\n", error_det_right);
+			chprintf((BaseSequentialStream *)&SD3, "left2=%d\r\n", error_det_left);
+
+        	// on crée error_det avce les coeff pour estimer la difference des deux cotes
+        	//error_det=prox_right-prox_left;
+        	error_det=(error_det_right-error_det_left);
+        	chprintf((BaseSequentialStream *)&SD3, "error1=%d\r\n", error_det);
+
+        	if (fabs(error_det) < 500)
         		error_det=0;
+
+        	chprintf((BaseSequentialStream *)&SD3, "error2=%d\r\n\r\n", error_det);
+
+        	//else
+        		// //si l'erreur est superieur on prend la difference des vraies valeurs entre les deux cotes
+       		//error_det=error_det_right-error_det_left;
+
+
+        	//if(abs(error_det)<1500)
+        		//error_det=0;
 
 
            sum_error_det += error_det;
            if(sum_error_det >= SUM_THRESHOLD)
-                   		sum_error_det = SUM_THRESHOLD;
-                   else if(sum_error_det <= -SUM_THRESHOLD)
-                   		sum_error_det = -SUM_THRESHOLD;
+        	   sum_error_det = SUM_THRESHOLD;
+           else if(sum_error_det <= -SUM_THRESHOLD)
+               sum_error_det = -SUM_THRESHOLD;
 
-           speed_det = (int16_t)(KP_DETECT*error_det ); //+ KI_DETECT*sum_error_det terme KI a mettre apres
+           speed_det = (int16_t)(KP_DETECT*error_det+ 0*KI_DETECT*sum_error_det ); //+ KI_DETECT*sum_error_det terme KI a mettre apres
 
-           right_motor_set_speed(200+speed_det);
-           left_motor_set_speed(200-speed_det);
+           right_motor_set_speed(400+speed_det);
+           left_motor_set_speed(400-speed_det);
            chThdSleepUntilWindowed(time_det, time_det + MS2ST(10));
       }
 
