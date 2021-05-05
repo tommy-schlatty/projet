@@ -10,7 +10,7 @@
 #include <pi_regulator.h>
 #include <process_image.h>
 
-#define DIST_OBJ 10.f
+
 #define ROT_GOAL IMAGE_BUFFER_SIZE/2
 #define ERROR_THRESHOLD 10.f
 #define SUM_THRESHOLD 60
@@ -28,8 +28,7 @@ static THD_FUNCTION(PiRegulator, arg) {
     systime_t time;
 
 	int16_t speed = 0;
-	float error = 0., prev_error = 0.;
-	float sum_error = 0., slope = 0;
+	float error, prev_error = 0., sum_error = 0., slope;
 
 
 	while(1){
@@ -71,7 +70,7 @@ static THD_FUNCTION(PiRegulator, arg) {
 		}
 		else
 		{
-				right_motor_set_speed(0);
+			right_motor_set_speed(0);
 			left_motor_set_speed(0);
 		}
 
