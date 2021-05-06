@@ -18,7 +18,7 @@
 #define KI 0.12f
 #define KD 0.0f
 #define DT 0.001f
-
+enum MODE{initialisation,pi_regulator, prox_regulator };
 #define FORWARD_COEFF  4
 #define MIDDLE_F_COEFF 3
 #define MIDDLE_B_COEFF 2
@@ -28,6 +28,9 @@
 #define NB_CAPTEUR 8
 #define NB_CAPTEUR_DROITE 4
 static int32_t proximity_distance[NB_CAPTEUR] = {0};
+
+// permet de definir le mode dans lequel on se trouve
+int8_t mode=0; // 1 appelle piregulator // 2 appelle proxregulator
 
 static THD_WORKING_AREA(waPiRegulator, 256);
 static THD_FUNCTION(PiRegulator, arg) {
@@ -43,9 +46,10 @@ static THD_FUNCTION(PiRegulator, arg) {
 
 	while(1){
 		time = chVTGetSystemTime();
-
+		if (get_line_position()<640){
 
     		error = get_line_position()-ROT_GOAL;
+
 
     		sum_error += error;
 
@@ -79,15 +83,20 @@ static THD_FUNCTION(PiRegulator, arg) {
     			left_motor_set_speed(500+speed);
 		}
 		else
-		{
-			right_motor_set_speed(0);
-			left_motor_set_speed(0);
+						{
+							//right_motor_set_speed(100);
+							//left_motor_set_speed(100);
+						}
+
 		}
-
-
+		else{
+			right_motor_set_speed(500);
+					left_motor_set_speed(500);
+		}
 		//1000Hz
-		chThdSleepUntilWindowed(time, time + MS2ST(1));
-    }
+		chThdSleepUntilWindowed(time, time + MS2ST(10));
+
+	}
 }
 
 static THD_WORKING_AREA(waProxRegulator, 256);
@@ -98,6 +107,7 @@ static THD_FUNCTION(ProxRegulator, arg) {
 
     systime_t time_det;
 
+
     int16_t sum_error_det = 0;
 
     while(1){
@@ -106,9 +116,16 @@ static THD_FUNCTION(ProxRegulator, arg) {
 		uint16_t prox_right, prox_left;
 
 		time_det = chVTGetSystemTime();
+		uint16_t sum_prox=0;
+		    for(uint8_t i = 0 ; i < NB_CAPTEUR ; i+=1){
+		    			sum_prox+=get_prox(i);
+		    }
+		    chprintf((BaseSequentialStream *)&SD3, "condition pro1=%d\r\n", sum_prox);
+		    if (sum_prox>400){
 
 		for(uint8_t i = 0 ; i < NB_CAPTEUR ; i+=1){
 			proximity_distance[i]=get_prox(i);
+
 			// coefficient a integrer dans cette condition. cas ou le robot est de travers dans le labyrinthe
 		}
 		prox_right=FORWARD_COEFF*proximity_distance[0]+MIDDLE_F_COEFF*proximity_distance[1]+MIDDLE_B_COEFF*proximity_distance[2]+BACKWARD_COEFF*proximity_distance[3];
@@ -147,12 +164,16 @@ static THD_FUNCTION(ProxRegulator, arg) {
 
 		speed_det = (int16_t)(KP_DETECT*error_det+ KI_DETECT*sum_error_det ); //+ KI_DETECT*sum_error_det terme KI a mettre apres
 
-		right_motor_set_speed(600+speed_det);
-		left_motor_set_speed(600-speed_det);
+		right_motor_set_speed(500+speed_det);
+		left_motor_set_speed(500-speed_det);
+		    }
+		    else{
+		    	right_motor_set_speed(500);
+		    			left_motor_set_speed(500);
+		    }
+		chThdSleepUntilWindowed(time_det, time_det + MS2ST(5)); // cela fonctionne avec 10 image 10 prox. Meilleur avec 5 prox pour eviter
 
-		chThdSleepUntilWindowed(time_det, time_det + MS2ST(10));
-	}
-
+    }
 }
 
 
