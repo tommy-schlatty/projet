@@ -19,7 +19,7 @@
 //semaphore
 static BSEMAPHORE_DECL(prox_det_sem, TRUE);
 static THD_WORKING_AREA(waProxLeader, 1024);
-//doit on vraiment créer un Thread?
+//doit on vraiment crï¿½er un Thread?
 static THD_FUNCTION(ProxLeader, arg) {
 	(void)arg;
     chRegSetThreadName(__FUNCTION__);
@@ -36,12 +36,12 @@ static THD_FUNCTION(ProxLeader, arg) {
     	messagebus_topic_wait(prox_topic, &prox_values, sizeof(prox_values));
 
     	for(uint8_t i = 0 ; i < 8 ; i+=1){
-    		chprintf((BaseSequentialStream *)&SD3, "%4d,", prox_values.ambient[i]);
-    		chprintf((BaseSequentialStream *)&SD3, "%4d,", prox_values.reflected[i]);
-    		chprintf((BaseSequentialStream *)&SD3, "%4d\r\n", prox_values.delta[i]);
+    		//chprintf((BaseSequentialStream *)&SD3, "%4d,", prox_values.ambient[i]);
+    		//chprintf((BaseSequentialStream *)&SD3, "%4d,", prox_values.reflected[i]);
+    		//chprintf((BaseSequentialStream *)&SD3, "%4d\r\n", prox_values.delta[i]);
 
     	}
-    	chprintf((BaseSequentialStream *)&SD3, "\r\n");
+    	//chprintf((BaseSequentialStream *)&SD3, "\r\n");
 
     	chThdSleepUntilWindowed(time, time + MS2ST(100)); // Refresh @ 10 Hz.
     }
