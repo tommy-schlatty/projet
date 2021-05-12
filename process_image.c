@@ -85,9 +85,11 @@ static THD_FUNCTION(ProcessImage, arg) {
 		else
 			send_to_computer = 1;
 
-		finish_line = detection_finish_line(image);
 		if (!finish_line)
-		detection_black_line(image);
+			finish_line = detection_finish_line(image);
+
+		if (!finish_line)
+			detection_black_line(image);
     }
 }
 
@@ -101,9 +103,11 @@ void detection_black_line(uint8_t *image)
 
 	uint16_t start, stop;
 	for(start = 0; start < IMAGE_BUFFER_SIZE && image[start] > 0.35*average; start++);
-	for(stop = start; stop < IMAGE_BUFFER_SIZE && image[stop] <= 0.35*average; stop++);
+	for(stop = start; stop < IMAGE_BUFFER_SIZE && image[stop] <= 0.60*average; stop++);
 
-	if (start < 640 && !finish_line && (stop-start) >= 150)
+	chprintf((BaseSequentialStream *)&SD3, "line=%d\r\n", (int16_t)(stop-start));
+
+	if (start < 640 && !finish_line && (stop-start) >= 20)
 		line_position = (start+(stop-start)/2);
 	else
 		line_position = 1000;
@@ -118,26 +122,26 @@ uint8_t detection_finish_line(uint8_t *image)
 
 	average /= IMAGE_BUFFER_SIZE;
 
-	//chprintf((BaseSequentialStream *)&SD3, "average=%d\r\n", average);
+	chprintf((BaseSequentialStream *)&SD3, "average=%d\r\n", average);
 	uint16_t start = 0;
 	for(uint16_t i = 0; i < IMAGE_BUFFER_SIZE; i++)
 	{
-		if(image[i] <= 0.4*average && start <= 0 && image[i+1] <= 0.4*average && image[i+2] <= 0.4*average)
+		if(image[i] <= 0.45*average && start == 0 && image[i+1] <= 0.45*average && image[i+2] <= 0.45*average && image[i+5] <= 0.45*average)
 		{
-			//chprintf((BaseSequentialStream *)&SD3, "start=%d\r\n", i);
-			start = i;
+			chprintf((BaseSequentialStream *)&SD3, "start=%d			%d\r\n", i, image[i]);
+			start = 1;
 		}
-		else if(image[i] >= 0.4*average && start > 0 && image[i+1] >= 0.4*average && image[i+2] >= 0.4*average)
+		else if(image[i] > 0.65*average && start == 1 && image[i+1] > 0.65*average && image[i+2] > 0.65*average && image[i+5] > 0.55*average)
 		{
-			//chprintf((BaseSequentialStream *)&SD3, "stop=%d\r\n", i);
+			chprintf((BaseSequentialStream *)&SD3, "stop=%d			%d\r\n", i, image[i]);
 			step +=2;
 			start = 0;
 		}
 
 	}
-	//chprintf((BaseSequentialStream *)&SD3, "step=%d\r\n", step);
+	chprintf((BaseSequentialStream *)&SD3, "step=%d\r\n", step);
 
-	if (step >= 5)
+	if (step >= 7)
 		return 1;
 
 	return 0;

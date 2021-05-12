@@ -28,10 +28,6 @@
 #define NB_CAPTEUR 8
 #define NB_CAPTEUR_DROITE 4
 
-enum MODE {NO_MODE,LINE_MODE,PROX_MODE};
-
-uint8_t mode = 0;
-
 void finishing_sequence(void);
 
 static THD_WORKING_AREA(waPiRegulator, 256);
