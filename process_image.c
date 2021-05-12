@@ -2,6 +2,7 @@
 #include "hal.h"
 #include <chprintf.h>
 #include <usbcfg.h>
+#include <stdbool.h>
 
 #include <main.h>
 #include <camera/po8030.h>
@@ -13,12 +14,15 @@
 
 static float line_position=IMAGE_BUFFER_SIZE/2;
 
+static bool finish_line = false;
+
 
 
 //semaphore
 static BSEMAPHORE_DECL(image_ready_sem, TRUE);
 
 void detection_black_line(uint8_t *image);
+uint8_t detection_finish_line(uint8_t *image);
 
 static THD_WORKING_AREA(waCaptureImage, 256);
 static THD_FUNCTION(CaptureImage, arg) {
@@ -74,11 +78,18 @@ static THD_FUNCTION(ProcessImage, arg) {
 
 
 		if(send_to_computer)
+		{
+			//SendUint8ToComputer(image, IMAGE_BUFFER_SIZE);
 			send_to_computer = 0;
+		}
 		else
 			send_to_computer = 1;
 
-		detection_black_line(image);
+		if (!finish_line)
+			finish_line = detection_finish_line(image);
+
+		if (!finish_line)
+			detection_black_line(image);
     }
 }
 
@@ -92,17 +103,58 @@ void detection_black_line(uint8_t *image)
 
 	uint16_t start, stop;
 	for(start = 0; start < IMAGE_BUFFER_SIZE && image[start] > 0.35*average; start++);
-	for(stop = start; stop < IMAGE_BUFFER_SIZE && image[stop] <= 0.35*average; stop++);
+	for(stop = start; stop < IMAGE_BUFFER_SIZE && image[stop] <= 0.60*average; stop++);
 
-	if (start < 640)
+	chprintf((BaseSequentialStream *)&SD3, "line=%d\r\n", (int16_t)(stop-start));
+
+	if (start < 640 && !finish_line && (stop-start) >= 20)
 		line_position = (start+(stop-start)/2);
 	else
 		line_position = 1000;
 }
 
-uint16_t get_line_position(void){
+uint8_t detection_finish_line(uint8_t *image)
+{
+	uint32_t average = 0;
+	uint8_t step = 0;
+	for (uint16_t i = 0; i<IMAGE_BUFFER_SIZE;i++)
+		average += image[i];
 
+	average /= IMAGE_BUFFER_SIZE;
+
+	chprintf((BaseSequentialStream *)&SD3, "average=%d\r\n", average);
+	uint16_t start = 0;
+	for(uint16_t i = 0; i < IMAGE_BUFFER_SIZE; i++)
+	{
+		if(image[i] <= 0.45*average && start == 0 && image[i+1] <= 0.45*average && image[i+2] <= 0.45*average && image[i+5] <= 0.45*average)
+		{
+			chprintf((BaseSequentialStream *)&SD3, "start=%d			%d\r\n", i, image[i]);
+			start = 1;
+		}
+		else if(image[i] > 0.65*average && start == 1 && image[i+1] > 0.65*average && image[i+2] > 0.65*average && image[i+5] > 0.55*average)
+		{
+			chprintf((BaseSequentialStream *)&SD3, "stop=%d			%d\r\n", i, image[i]);
+			step +=2;
+			start = 0;
+		}
+
+	}
+	chprintf((BaseSequentialStream *)&SD3, "step=%d\r\n", step);
+
+	if (step >= 7)
+		return 1;
+
+	return 0;
+}
+
+uint16_t get_line_position(void)
+{
 	return line_position;
+}
+
+uint8_t get_finish_line(void)
+{
+	return finish_line;
 }
 
 void process_image_start(void){
