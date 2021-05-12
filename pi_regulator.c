@@ -123,7 +123,7 @@ static THD_FUNCTION(ProxRegulator, arg) {
 		    for(uint8_t i = 0 ; i < NB_CAPTEUR ; i+=1){
 		    			sum_prox+=get_prox(i);
 		    }
-		    chprintf((BaseSequentialStream *)&SD3, "condition pro1=%d\r\n", sum_prox);
+		    //chprintf((BaseSequentialStream *)&SD3, "condition pro1=%d\r\n", sum_prox);
 		    if (sum_prox>400){
 
 		for(uint8_t i = 0 ; i < NB_CAPTEUR ; i++){
