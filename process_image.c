@@ -31,10 +31,8 @@ static THD_FUNCTION(CaptureImage, arg) {
     (void)arg;
 
 	//Takes pixels 0 to IMAGE_BUFFER_SIZE of the line 478 and 479 (minimum 2 lines because reasons)
-    //horizontal ligne basse
 	po8030_advanced_config(FORMAT_RGB565, 0, 478, IMAGE_BUFFER_SIZE, 2, SUBSAMPLING_X1, SUBSAMPLING_X1);
-    //vertical ligne milieu
-    //int8_t state = po8030_advanced_config(FORMAT_RGB565, 320, 0, 2, 480, SUBSAMPLING_X1, SUBSAMPLING_X1);
+
 	dcmi_enable_double_buffering();
 	dcmi_set_capture_mode(CAPTURE_ONE_SHOT);
 	dcmi_prepare();
@@ -47,7 +45,6 @@ static THD_FUNCTION(CaptureImage, arg) {
 		dcmi_capture_start();
 		//waits for the capture to be done
 		wait_image_ready();
-
 		//signals an image has been captured
 		chBSemSignal(&image_ready_sem);
     }
@@ -76,7 +73,7 @@ static THD_FUNCTION(ProcessImage, arg) {
 			image[i/2] = (uint8_t)img_buff_ptr[i]&0xF8;
 		}
 
-
+		////enlever au dernier moment//////////debut
 		if(send_to_computer)
 		{
 			//SendUint8ToComputer(image, IMAGE_BUFFER_SIZE);
@@ -84,11 +81,12 @@ static THD_FUNCTION(ProcessImage, arg) {
 		}
 		else
 			send_to_computer = 1;
+		///////////////////////////////fin
 
-		if (!finish_line)
+		if (!finish_line) //////TESTER SANS LE IF
 			finish_line = detection_finish_line(image);
 
-		if (!finish_line)
+		if (!finish_line) ///////tester sans le if
 			detection_black_line(image);
     }
 }
@@ -105,8 +103,6 @@ void detection_black_line(uint8_t *image)
 	for(start = 0; start < IMAGE_BUFFER_SIZE && image[start] > 0.35*average; start++);
 	for(stop = start; stop < IMAGE_BUFFER_SIZE && image[stop] <= 0.60*average; stop++);
 
-	chprintf((BaseSequentialStream *)&SD3, "line=%d\r\n", (int16_t)(stop-start));
-
 	if (start < 640 && !finish_line && (stop-start) >= 20)
 		line_position = (start+(stop-start)/2);
 	else
@@ -117,29 +113,23 @@ uint8_t detection_finish_line(uint8_t *image)
 {
 	uint32_t average = 0;
 	uint8_t step = 0;
+
 	for (uint16_t i = 0; i<IMAGE_BUFFER_SIZE;i++)
 		average += image[i];
 
 	average /= IMAGE_BUFFER_SIZE;
 
-	chprintf((BaseSequentialStream *)&SD3, "average=%d\r\n", average);
-	uint16_t start = 0;
+	bool started = 0;
 	for(uint16_t i = 0; i < IMAGE_BUFFER_SIZE; i++)
 	{
-		if(image[i] <= 0.45*average && start == 0 && image[i+1] <= 0.45*average && image[i+2] <= 0.45*average && image[i+5] <= 0.45*average)
+		if(image[i] <= 0.45*average && started == false && image[i+1] <= 0.45*average && image[i+2] <= 0.45*average && image[i+5] <= 0.45*average)
+			started = true;
+		else if(image[i] > 0.65*average && started == true && image[i+1] > 0.65*average && image[i+2] > 0.65*average && image[i+5] > 0.55*average)
 		{
-			chprintf((BaseSequentialStream *)&SD3, "start=%d			%d\r\n", i, image[i]);
-			start = 1;
-		}
-		else if(image[i] > 0.65*average && start == 1 && image[i+1] > 0.65*average && image[i+2] > 0.65*average && image[i+5] > 0.55*average)
-		{
-			chprintf((BaseSequentialStream *)&SD3, "stop=%d			%d\r\n", i, image[i]);
 			step +=2;
-			start = 0;
+			started = false;
 		}
-
 	}
-	chprintf((BaseSequentialStream *)&SD3, "step=%d\r\n", step);
 
 	if (step >= 7)
 		return 1;

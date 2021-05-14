@@ -28,10 +28,9 @@
 #define NB_CAPTEUR 8
 #define NB_CAPTEUR_DROITE 4
 
-void finishing_sequence(void);
+#define M_SPEED 800
 
-// permet de definir le mode dans lequel on se trouve
-int8_t mode=0; // 1 appelle piregulator // 2 appelle proxregulator
+void finishing_sequence(void);
 
 static THD_WORKING_AREA(waPiRegulator, 256);
 static THD_FUNCTION(PiRegulator, arg) {
@@ -73,27 +72,17 @@ static THD_FUNCTION(PiRegulator, arg) {
 
 			speed = (int16_t)(KP*error + KI*sum_error + KD*slope);
 
-
-
-
 			//applies the speed from the PI regulator
-			if(error < 640)
-			{
-				right_motor_set_speed(500-speed);
-				left_motor_set_speed(500+speed);
-			}
-			else
-			{
-				//right_motor_set_speed(100);
-				//left_motor_set_speed(100);
-			}
+			right_motor_set_speed(M_SPEED-speed);
+			left_motor_set_speed(M_SPEED+speed);
+
 
 		}
 		else{
-			right_motor_set_speed(500);
-			left_motor_set_speed(500);
+			right_motor_set_speed(M_SPEED);
+			left_motor_set_speed(M_SPEED);
 		}
-		//1000Hz
+		//100Hz
 		chThdSleepUntilWindowed(time, time + MS2ST(10));
 		stop = get_finish_line();
 
@@ -115,61 +104,49 @@ static THD_FUNCTION(ProxRegulator, arg) {
     while(!stop)
     {
 		int16_t speed_det, error_det;
-		uint16_t error_det_right = 0, error_det_left = 0;
 		uint16_t prox_right, prox_left;
 
 		time_det = chVTGetSystemTime();
 		uint16_t sum_prox=0;
-		    for(uint8_t i = 0 ; i < NB_CAPTEUR ; i+=1){
-		    			sum_prox+=get_prox(i);
-		    }
-		    //chprintf((BaseSequentialStream *)&SD3, "condition pro1=%d\r\n", sum_prox);
-		    if (sum_prox>400){
-
-		for(uint8_t i = 0 ; i < NB_CAPTEUR ; i++){
-			proximity_distance[i]=get_prox(i);
-			// coefficient a integrer dans cette condition. cas ou le robot est de travers dans le labyrinthe
-		}
-		prox_right=FORWARD_COEFF*proximity_distance[0]+MIDDLE_F_COEFF*proximity_distance[1]+MIDDLE_B_COEFF*proximity_distance[2]+BACKWARD_COEFF*proximity_distance[3];
-		prox_left=FORWARD_COEFF*proximity_distance[7]+MIDDLE_F_COEFF*proximity_distance[6]+MIDDLE_B_COEFF*proximity_distance[5]+BACKWARD_COEFF*proximity_distance[4];
-		//On compare capteurs gauches et droites pour savoir dans quel sens tourner
-
-
-		// ces deux boucles for ne servent pas si l'on s'occupe uniquement des valeurs avec coeffs
-
-		for(uint8_t i = 0 ; i < NB_CAPTEUR_DROITE ; i+=1){
-			error_det_right+=proximity_distance[i];
+		for(uint8_t i = 0 ; i < NB_CAPTEUR ; i+=1){
+					sum_prox+=get_prox(i);
 		}
 
-		for(uint8_t i = NB_CAPTEUR_DROITE ; i < NB_CAPTEUR ; i+=1){
-			error_det_left+=proximity_distance[i];
+		if (sum_prox>400){
+
+			for(uint8_t i = 0 ; i < NB_CAPTEUR ; i++){
+				proximity_distance[i]=get_prox(i);
+				// coefficient a integrer dans cette condition. cas ou le robot est de travers dans le labyrinthe
+			}
+
+			prox_right=FORWARD_COEFF*proximity_distance[0]+MIDDLE_F_COEFF*proximity_distance[1]+MIDDLE_B_COEFF*proximity_distance[2]+BACKWARD_COEFF*proximity_distance[3];
+			prox_left=FORWARD_COEFF*proximity_distance[7]+MIDDLE_F_COEFF*proximity_distance[6]+MIDDLE_B_COEFF*proximity_distance[5]+BACKWARD_COEFF*proximity_distance[4];
+
+
+			// on cree error_det avec les coeff pour estimer la difference des deux cotes
+			error_det=(prox_right-prox_left);
+
+
+			if (fabs(error_det) < M_SPEED)
+				error_det=0;
+
+
+			sum_error_det += error_det;
+
+			if(sum_error_det >= SUM_THRESHOLD)
+				sum_error_det = SUM_THRESHOLD;
+			else if(sum_error_det <= -SUM_THRESHOLD)
+				sum_error_det = -SUM_THRESHOLD;
+
+			speed_det = (int16_t)(KP_DETECT*error_det+ KI_DETECT*sum_error_det );
+
+			right_motor_set_speed(M_SPEED+speed_det);
+			left_motor_set_speed(M_SPEED-speed_det);
 		}
-
-
-		// on cree error_det avec les coeff pour estimer la difference des deux cotes
-		error_det=(prox_right-prox_left);
-
-
-		if (fabs(error_det) < 500)
-			error_det=0;
-
-
-		sum_error_det += error_det;
-
-		if(sum_error_det >= SUM_THRESHOLD)
-			sum_error_det = SUM_THRESHOLD;
-		else if(sum_error_det <= -SUM_THRESHOLD)
-			sum_error_det = -SUM_THRESHOLD;
-
-		speed_det = (int16_t)(KP_DETECT*error_det+ KI_DETECT*sum_error_det ); //+ KI_DETECT*sum_error_det terme KI a mettre apres
-
-		right_motor_set_speed(500+speed_det);
-		left_motor_set_speed(500-speed_det);
-		    }
-		    else{
-		    	right_motor_set_speed(500);
-		    			left_motor_set_speed(500);
-		    }
+		else{
+			right_motor_set_speed(M_SPEED);
+			left_motor_set_speed(M_SPEED);
+		}
 		chThdSleepUntilWindowed(time_det, time_det + MS2ST(5)); // cela fonctionne avec 10 image 10 prox. Meilleur avec 5 prox pour eviter
 		stop = get_finish_line();
     }
@@ -178,22 +155,20 @@ static THD_FUNCTION(ProxRegulator, arg) {
 
 void finishing_sequence(void)
 {
-	systime_t time = chVTGetSystemTime();
 
-	right_motor_set_speed(500);
-	left_motor_set_speed(500);
+	//Robot avance tout droit pour depasser la ligne
+	right_motor_set_speed(M_SPEED);
+	left_motor_set_speed(M_SPEED);
+	chThdSleepMilliseconds(900000/M_SPEED);
 
-	chThdSleepUntilWindowed(time, time + MS2ST(1800));
-
-	time = chVTGetSystemTime();
-
+	//Rotation du robot de 540deg sur lui meme
 	right_motor_set_speed(1000);
 	left_motor_set_speed(-1000);
+	chThdSleepMilliseconds(1950);
 
-	chThdSleepUntilWindowed(time, time + MS2ST(1950));
-
-	right_motor_set_speed(00);
-	left_motor_set_speed(00);
+	//Arret du robot
+	right_motor_set_speed(0);
+	left_motor_set_speed(0);
 
 }
 
