@@ -16,8 +16,6 @@
 #define SUM_THRESHOLD 60
 #define KP 2.4f
 #define KI 0.12f
-#define KD 0.0f
-#define DT 0.001f
 
 #define FORWARD_COEFF  4
 #define MIDDLE_F_COEFF 3
@@ -28,12 +26,14 @@
 #define NB_CAPTEUR 8
 #define NB_CAPTEUR_DROITE 4
 
-#define M_SPEED 800
+#define M_SPEED 700
+
+static bool stop = 0;
 
 void finishing_sequence(void);
 
-static THD_WORKING_AREA(waPiRegulator, 256);
-static THD_FUNCTION(PiRegulator, arg) {
+static THD_WORKING_AREA(waLineFollowRegulator, 256);
+static THD_FUNCTION(LineFollowRegulator, arg) {
 
     chRegSetThreadName(__FUNCTION__);
     (void)arg;
@@ -41,8 +41,7 @@ static THD_FUNCTION(PiRegulator, arg) {
     systime_t time;
 
 	int16_t speed = 0;
-	float error, prev_error = 0., sum_error = 0., slope;
-	uint8_t stop = 0;
+	float error, sum_error = 0.;
 
 	while(!stop){
 		time = chVTGetSystemTime();
@@ -52,15 +51,10 @@ static THD_FUNCTION(PiRegulator, arg) {
 
 			sum_error += error;
 
-			slope = (error-prev_error)/DT;
-
-			prev_error = error;
-
 			if(fabs(error) < ERROR_THRESHOLD)
 			{
 				error=0;
 				sum_error = 0;
-				slope = 0;
 			}
 			else
 			{
@@ -70,12 +64,11 @@ static THD_FUNCTION(PiRegulator, arg) {
 					sum_error = -SUM_THRESHOLD;
 			}
 
-			speed = (int16_t)(KP*error + KI*sum_error + KD*slope);
+			speed = (int16_t)(KP*error + KI*sum_error);
 
 			//applies the speed from the PI regulator
 			right_motor_set_speed(M_SPEED-speed);
 			left_motor_set_speed(M_SPEED+speed);
-
 
 		}
 		else{
@@ -84,10 +77,7 @@ static THD_FUNCTION(PiRegulator, arg) {
 		}
 		//100Hz
 		chThdSleepUntilWindowed(time, time + MS2ST(10));
-		stop = get_finish_line();
-
 	}
-	finishing_sequence();
 }
 
 static THD_WORKING_AREA(waProxRegulator, 256);
@@ -99,7 +89,6 @@ static THD_FUNCTION(ProxRegulator, arg) {
     systime_t time_det;
     int16_t proximity_distance[NB_CAPTEUR];
     int16_t sum_error_det = 0;
-    uint8_t stop = 0;
 
     while(!stop)
     {
@@ -108,8 +97,9 @@ static THD_FUNCTION(ProxRegulator, arg) {
 
 		time_det = chVTGetSystemTime();
 		uint16_t sum_prox=0;
+
 		for(uint8_t i = 0 ; i < NB_CAPTEUR ; i+=1){
-					sum_prox+=get_prox(i);
+			sum_prox+=get_prox(i);
 		}
 
 		if (sum_prox>400){
@@ -127,7 +117,7 @@ static THD_FUNCTION(ProxRegulator, arg) {
 			error_det=(prox_right-prox_left);
 
 
-			if (fabs(error_det) < M_SPEED)
+			if (fabs(error_det) < 500)
 				error_det=0;
 
 
@@ -148,9 +138,26 @@ static THD_FUNCTION(ProxRegulator, arg) {
 			left_motor_set_speed(M_SPEED);
 		}
 		chThdSleepUntilWindowed(time_det, time_det + MS2ST(5)); // cela fonctionne avec 10 image 10 prox. Meilleur avec 5 prox pour eviter
-		stop = get_finish_line();
     }
-    finishing_sequence();
+}
+
+static THD_WORKING_AREA(waFinish, 256);
+static THD_FUNCTION(Finish, arg) {
+
+    chRegSetThreadName(__FUNCTION__);
+    (void)arg;
+
+    systime_t time;
+
+    while(1)
+    {
+    		time = chVTGetSystemTime();
+		stop = get_finish_line();
+		if(stop)
+			finishing_sequence();
+		chThdSleepUntilWindowed(time, time + MS2ST(10));
+    }
+
 }
 
 void finishing_sequence(void)
@@ -159,7 +166,7 @@ void finishing_sequence(void)
 	//Robot avance tout droit pour depasser la ligne
 	right_motor_set_speed(M_SPEED);
 	left_motor_set_speed(M_SPEED);
-	chThdSleepMilliseconds(900000/M_SPEED);
+	chThdSleepMilliseconds(1000000/M_SPEED);
 
 	//Rotation du robot de 540deg sur lui meme
 	right_motor_set_speed(1000);
@@ -172,9 +179,12 @@ void finishing_sequence(void)
 
 }
 
+void finish_start(void){
+	chThdCreateStatic(waFinish, sizeof(waFinish), NORMALPRIO, Finish, NULL);
+}
 
-void pi_regulator_start(void){
-	chThdCreateStatic(waPiRegulator, sizeof(waPiRegulator), NORMALPRIO, PiRegulator, NULL);
+void line_follow_regulator_start(void){
+	chThdCreateStatic(waLineFollowRegulator, sizeof(waLineFollowRegulator), NORMALPRIO, LineFollowRegulator, NULL);
 }
 void detect_regulator_start(void){
 	chThdCreateStatic(waProxRegulator, sizeof(waProxRegulator), NORMALPRIO, ProxRegulator, NULL);
