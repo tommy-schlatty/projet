@@ -8,12 +8,16 @@
 
 #include <process_image.h>
 
-#define LOW_FACTOR 0.45f
-#define HIGH_FACTOR 0.65f
+#define LOW_FACTOR_LINE 0.35f
+#define HIGH_FACTOR_LINE 0.60f
+#define MIN_LINE_SIZE 20
+
+#define LOW_FACTOR_FINISH 0.45f
+#define HIGH_FACTOR_FINISH 0.65f
+#define MIN_STEP_FINISH 7
 
 
 static float line_position=IMAGE_BUFFER_SIZE/2;
-
 static bool finish_line = false;
 
 
@@ -86,13 +90,16 @@ void detection_black_line(uint8_t *image)
 	average /= IMAGE_BUFFER_SIZE;
 
 	uint16_t start, stop;
-	for(start = 0; start < IMAGE_BUFFER_SIZE && image[start] > 0.35*average; start++);
-	for(stop = start; stop < IMAGE_BUFFER_SIZE && image[stop] <= 0.60*average; stop++);
+	//determine pixel de depart de lq ligne
+	for(start = 0; start < IMAGE_BUFFER_SIZE && image[start] > LOW_FACTOR_LINE*average; start++);
+	//determine pixel de fin de lq ligne
+	for(stop = start; stop < IMAGE_BUFFER_SIZE && image[stop] <= HIGH_FACTOR_LINE*average; stop++);
 
-	if (start < IMAGE_BUFFER_SIZE && !finish_line && (stop-start) >= 20)
+	//verification si valeurs sont correctes
+	if (start < IMAGE_BUFFER_SIZE && !finish_line && (stop-start) >= MIN_LINE_SIZE)
 		line_position = (start+(stop-start)/2);
 	else
-		line_position = 1000;
+		line_position = IMAGE_BUFFER_SIZE;
 }
 
 bool detection_finish_line(uint8_t *image)
@@ -106,18 +113,19 @@ bool detection_finish_line(uint8_t *image)
 	average /= IMAGE_BUFFER_SIZE;
 
 	bool started = 0;
+	//determine le nombre sauts de luminosité vus par la camera
 	for(uint16_t i = 0; i < IMAGE_BUFFER_SIZE; i++)
 	{
-		if(image[i] <= LOW_FACTOR*average && started == false && image[i+1] <= LOW_FACTOR*average && image[i+2] <= LOW_FACTOR*average && image[i+5] <= LOW_FACTOR*average)
+		if(image[i] <= LOW_FACTOR_FINISH*average && started == false && image[i+1] <= LOW_FACTOR_FINISH*average && image[i+2] <= LOW_FACTOR_FINISH*average && image[i+5] <= LOW_FACTOR_FINISH*average)
 			started = true;
-		else if(image[i] > HIGH_FACTOR*average && started == true && image[i+1] > HIGH_FACTOR*average && image[i+2] > HIGH_FACTOR*average && image[i+5] > HIGH_FACTOR*average)
+		else if(image[i] > HIGH_FACTOR_FINISH*average && started == true && image[i+1] > HIGH_FACTOR_FINISH*average && image[i+2] > HIGH_FACTOR_FINISH*average && image[i+5] > HIGH_FACTOR_FINISH*average)
 		{
 			step +=2;
 			started = false;
 		}
 	}
 
-	if (step >= 7)
+	if (step >= MIN_STEP_FINISH)
 		return true;
 
 	return false;

@@ -55,7 +55,7 @@ int main(void)
 	calibrate_ir();
 
 
-	//stars the threads for the pi regulator and the processing of the image
+	//stars the threads for the line following regulator, the proximity detectors regulator, the processing of the image, the finish line detector
 	process_image_start();
 	line_follow_regulator_start();
 	detect_regulator_start();

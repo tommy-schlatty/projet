@@ -25,6 +25,13 @@
 #define KI_DETECT 0.1f
 #define NB_CAPTEUR 8
 #define NB_CAPTEUR_DROITE 4
+#define MIN_SUM_PROX 400
+#define ERROR_THRESHOLD_DETECT 500
+
+#define ROT_SPEED 1000
+#define DIST_STEP_FINISH 1000000
+#define STOP 0
+#define ROT_TIME 1950
 
 #define M_SPEED 700
 
@@ -45,7 +52,7 @@ static THD_FUNCTION(LineFollowRegulator, arg) {
 
 	while(!stop){
 		time = chVTGetSystemTime();
-		if (get_line_position()<640){
+		if (get_line_position() < IMAGE_BUFFER_SIZE){
 
 			error = get_line_position()-ROT_GOAL;
 
@@ -58,6 +65,7 @@ static THD_FUNCTION(LineFollowRegulator, arg) {
 			}
 			else
 			{
+				//limite pour éviter l'emballement
 				if(sum_error >= SUM_THRESHOLD)
 					sum_error = SUM_THRESHOLD;
 				else if(sum_error <= -SUM_THRESHOLD)
@@ -66,7 +74,7 @@ static THD_FUNCTION(LineFollowRegulator, arg) {
 
 			speed = (int16_t)(KP*error + KI*sum_error);
 
-			//applies the speed from the PI regulator
+			//on applique la vitesse du régulateur PI
 			right_motor_set_speed(M_SPEED-speed);
 			left_motor_set_speed(M_SPEED+speed);
 
@@ -102,34 +110,39 @@ static THD_FUNCTION(ProxRegulator, arg) {
 			sum_prox+=get_prox(i);
 		}
 
-		if (sum_prox>400){
+		if (sum_prox > MIN_SUM_PROX){
 
 			for(uint8_t i = 0 ; i < NB_CAPTEUR ; i++){
 				proximity_distance[i]=get_prox(i);
-				// coefficient a integrer dans cette condition. cas ou le robot est de travers dans le labyrinthe
+				//on recupere les valeurs des capteurs de proximites
 			}
 
+			//on additionne les valeurs des capteurs de proximités d'un coté avec des coefficients pour apporter plus d'importance aux capteurs le necessitant.
+			//on fait la meme chose avec l'autre cote
 			prox_right=FORWARD_COEFF*proximity_distance[0]+MIDDLE_F_COEFF*proximity_distance[1]+MIDDLE_B_COEFF*proximity_distance[2]+BACKWARD_COEFF*proximity_distance[3];
 			prox_left=FORWARD_COEFF*proximity_distance[7]+MIDDLE_F_COEFF*proximity_distance[6]+MIDDLE_B_COEFF*proximity_distance[5]+BACKWARD_COEFF*proximity_distance[4];
 
 
-			// on cree error_det avec les coeff pour estimer la difference des deux cotes
+			//on calcul error_det pour le regulateur
 			error_det=(prox_right-prox_left);
 
 
-			if (fabs(error_det) < 500)
+			if (fabs(error_det) < ERROR_THRESHOLD_DETECT)
 				error_det=0;
 
 
 			sum_error_det += error_det;
 
+			//limite pour éviter l'emballement
 			if(sum_error_det >= SUM_THRESHOLD)
 				sum_error_det = SUM_THRESHOLD;
 			else if(sum_error_det <= -SUM_THRESHOLD)
 				sum_error_det = -SUM_THRESHOLD;
 
+			//vitesse du régulateur
 			speed_det = (int16_t)(KP_DETECT*error_det+ KI_DETECT*sum_error_det );
 
+			//on applique la vitesse du régulateur PI
 			right_motor_set_speed(M_SPEED+speed_det);
 			left_motor_set_speed(M_SPEED-speed_det);
 		}
@@ -166,16 +179,16 @@ void finishing_sequence(void)
 	//Robot avance tout droit pour depasser la ligne
 	right_motor_set_speed(M_SPEED);
 	left_motor_set_speed(M_SPEED);
-	chThdSleepMilliseconds(1000000/M_SPEED);
+	chThdSleepMilliseconds(DIST_STEP_FINISH/M_SPEED);
 
 	//Rotation du robot de 540deg sur lui meme
-	right_motor_set_speed(1000);
-	left_motor_set_speed(-1000);
-	chThdSleepMilliseconds(1950);
+	right_motor_set_speed(ROT_SPEED);
+	left_motor_set_speed(-ROT_SPEED);
+	chThdSleepMilliseconds(ROT_TIME);
 
 	//Arret du robot
-	right_motor_set_speed(0);
-	left_motor_set_speed(0);
+	right_motor_set_speed(STOP);
+	left_motor_set_speed(STOP);
 
 }
 
