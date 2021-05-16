@@ -32,7 +32,7 @@ static bool stop = 0;
 
 void finishing_sequence(void);
 
-static THD_WORKING_AREA(waLineFollowRegulator, 256);
+static THD_WORKING_AREA(waLineFollowRegulator, 64);
 static THD_FUNCTION(LineFollowRegulator, arg) {
 
     chRegSetThreadName(__FUNCTION__);
@@ -80,7 +80,7 @@ static THD_FUNCTION(LineFollowRegulator, arg) {
 	}
 }
 
-static THD_WORKING_AREA(waProxRegulator, 256);
+static THD_WORKING_AREA(waProxRegulator, 64);
 static THD_FUNCTION(ProxRegulator, arg) {
 
     chRegSetThreadName(__FUNCTION__);
@@ -141,7 +141,7 @@ static THD_FUNCTION(ProxRegulator, arg) {
     }
 }
 
-static THD_WORKING_AREA(waFinish, 256);
+static THD_WORKING_AREA(waFinish, 32);
 static THD_FUNCTION(Finish, arg) {
 
     chRegSetThreadName(__FUNCTION__);
@@ -180,7 +180,7 @@ void finishing_sequence(void)
 }
 
 void finish_start(void){
-	chThdCreateStatic(waFinish, sizeof(waFinish), NORMALPRIO, Finish, NULL);
+	chThdCreateStatic(waFinish, sizeof(waFinish), NORMALPRIO-1, Finish, NULL);
 }
 
 void line_follow_regulator_start(void){
